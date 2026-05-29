@@ -1,0 +1,480 @@
+<!--
+  디지털편집부 월드컵 스코어 챌린지 (공개 호스팅용 / Firebase 버전)
+  - GitHub Pages 등 공개 페이지에 올려 로그인 없이 사용
+  - 데이터 공유: Firebase Realtime Database (무료)
+  - ★ 사용 전: 아래 firebaseConfig 에 본인 Firebase 프로젝트 설정을 붙여넣으세요
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<style>
+  :root{
+    --bg-0:#080b14;
+    --bg-1:#0f1626;
+    --card:#151d31;
+    --card-2:#1b2540;
+    --line:#2a3554;
+    --txt:#eef1f8;
+    --muted:#8b96b3;
+    --red:#e63946;
+    --red-soft:#ff5a67;
+    --gold:#ffce3a;
+    --green:#3ddc97;
+    --blue:#4d8dff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg-0);color:var(--txt);font-family:'Gothic A1',sans-serif;-webkit-font-smoothing:antialiased}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(1200px 600px at 50% -200px, rgba(230,57,70,.18), transparent 60%),
+      radial-gradient(900px 500px at 90% 10%, rgba(77,141,255,.10), transparent 55%),
+      linear-gradient(180deg,var(--bg-0),var(--bg-1));
+    background-attachment:fixed;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:22px 16px 80px}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;text-align:center;padding:30px 14px 22px;overflow:hidden}
+  .hero::before{
+    content:"";position:absolute;inset:0;
+    background-image:repeating-linear-gradient(90deg,transparent 0 38px,rgba(255,255,255,.025) 38px 39px);
+    pointer-events:none;
+  }
+  .badge{display:inline-block;font-weight:800;font-size:11px;letter-spacing:.18em;color:var(--gold);
+    border:1px solid rgba(255,206,58,.4);border-radius:99px;padding:5px 14px;margin-bottom:14px;text-transform:uppercase}
+  h1{font-family:'Black Han Sans',sans-serif;font-weight:400;line-height:.98;font-size:clamp(34px,8.5vw,58px);letter-spacing:-.01em}
+  h1 .accent{color:var(--red-soft)}
+  .sub{color:var(--muted);font-weight:500;margin-top:10px;font-size:14px}
+
+  /* ---------- name bar ---------- */
+  .namebar{display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:10px 12px;margin:18px 0}
+  .namebar .who{flex:1;font-weight:700;font-size:14px}
+  .namebar .who small{display:block;color:var(--muted);font-weight:500;font-size:11px;margin-top:2px}
+  input,select{font-family:inherit}
+  .name-input{flex:1;background:var(--bg-0);border:1px solid var(--line);border-radius:10px;color:var(--txt);
+    padding:11px 12px;font-size:15px;font-weight:600}
+  .name-input::placeholder{color:#5a6480}
+  .btn{cursor:pointer;border:none;border-radius:10px;font-family:inherit;font-weight:800;transition:transform .08s,filter .15s}
+  .btn:active{transform:translateY(1px)}
+  .btn-red{background:linear-gradient(135deg,var(--red),#c92a37);color:#fff;padding:11px 16px;font-size:14px}
+  .btn-red:hover{filter:brightness(1.08)}
+  .btn-ghost{background:var(--card-2);color:var(--muted);padding:9px 13px;font-size:13px;border:1px solid var(--line)}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px;margin-bottom:18px}
+  .tab{flex:1;text-align:center;padding:11px 6px;border-radius:10px;font-weight:800;font-size:14px;color:var(--muted);cursor:pointer;transition:.15s}
+  .tab.active{background:linear-gradient(135deg,var(--red),#bb2530);color:#fff;box-shadow:0 6px 18px -8px var(--red)}
+
+  /* ---------- match card ---------- */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;
+    animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .m-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+  .m-no{font-family:'Black Han Sans',sans-serif;color:var(--red-soft);font-size:13px;letter-spacing:.05em}
+  .m-meta{color:var(--muted);font-size:12px;font-weight:600;text-align:right;line-height:1.5}
+  .m-teams{font-family:'Black Han Sans',sans-serif;font-size:clamp(22px,6vw,30px);display:flex;align-items:center;gap:10px;margin:6px 0 14px}
+  .m-teams .vs{color:var(--muted);font-size:16px}
+  .pill{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.08em;padding:3px 9px;border-radius:99px;vertical-align:middle}
+  .pill-open{background:rgba(61,220,151,.16);color:var(--green)}
+  .pill-soon{background:rgba(77,141,255,.16);color:var(--blue)}
+  .pill-lock{background:rgba(139,150,179,.16);color:var(--muted)}
+  .pill-done{background:rgba(255,206,58,.16);color:var(--gold)}
+  .pill-bonus{background:rgba(230,57,70,.18);color:var(--red-soft);margin-left:6px}
+
+  .score-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+  .team-box{text-align:center}
+  .team-box .lbl{font-weight:800;font-size:14px;margin-bottom:8px}
+  .stepper{display:flex;align-items:center;justify-content:center;gap:6px}
+  .step-btn{width:38px;height:38px;border-radius:10px;background:var(--card-2);border:1px solid var(--line);color:var(--txt);font-size:20px;font-weight:800;cursor:pointer;line-height:1}
+  .step-btn:hover{border-color:var(--red)}
+  .step-val{font-family:'Black Han Sans',sans-serif;font-size:32px;min-width:44px;text-align:center}
+  .colon{font-family:'Black Han Sans',sans-serif;font-size:26px;color:var(--muted);padding-top:24px}
+  .save-line{display:flex;gap:8px;align-items:center;margin-top:14px}
+  .save-line .btn-red{flex:1;padding:13px}
+  .saved-note{color:var(--green);font-size:12px;font-weight:700}
+
+  /* result + reveal */
+  .result-strip{margin-top:12px;padding:12px;background:var(--card-2);border:1px solid var(--line);border-radius:12px;text-align:center}
+  .result-strip .r-score{font-family:'Black Han Sans',sans-serif;font-size:26px}
+  .result-strip .r-lbl{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.1em}
+  .reveal{margin-top:12px}
+  .reveal h4{font-size:12px;color:var(--muted);font-weight:800;letter-spacing:.08em;margin-bottom:8px}
+  .reveal-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:9px;background:var(--bg-0);margin-bottom:6px;font-size:14px}
+  .reveal-row .nm{font-weight:700}
+  .reveal-row .sc{font-family:'Black Han Sans',sans-serif}
+  .tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;margin-left:7px}
+  .tag-hit{background:rgba(255,206,58,.18);color:var(--gold)}
+  .tag-out{background:rgba(61,220,151,.16);color:var(--green)}
+
+  /* ---------- leaderboard ---------- */
+  .lb-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+  .lb-head h2{font-family:'Black Han Sans',sans-serif;font-size:24px}
+  .lb-head .cnt{color:var(--muted);font-size:13px;font-weight:700}
+  .lb-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:13px 15px;margin-bottom:9px;animation:rise .4s both}
+  .lb-rank{font-family:'Black Han Sans',sans-serif;font-size:22px;width:34px;text-align:center;color:var(--muted)}
+  .lb-row.r1{border-color:var(--gold);box-shadow:0 8px 24px -14px var(--gold)}
+  .lb-row.r1 .lb-rank,.lb-row.r2 .lb-rank,.lb-row.r3 .lb-rank{color:var(--txt)}
+  .lb-name{flex:1;font-weight:800;font-size:16px}
+  .lb-name .you{color:var(--red-soft);font-size:11px;font-weight:800;margin-left:6px}
+  .lb-break{display:flex;gap:5px;margin-top:5px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}
+  .dot.p3{background:var(--gold)}.dot.p1{background:var(--blue)}.dot.p0{background:#3a4566}
+  .lb-pts{font-family:'Black Han Sans',sans-serif;font-size:26px;color:var(--gold)}
+  .lb-pts small{font-size:12px;color:var(--muted);font-family:'Gothic A1';font-weight:700}
+
+  /* ---------- admin ---------- */
+  .admin-lock{text-align:center;padding:24px}
+  .admin-lock input{margin:12px auto;display:block;max-width:240px;text-align:center}
+  .adm-match{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .adm-match .t{font-weight:800;margin-bottom:10px}
+
+  .rules{background:rgba(255,255,255,.03);border:1px dashed var(--line);border-radius:14px;padding:15px 17px;margin-top:18px;font-size:13px;color:var(--muted);line-height:1.7}
+  .rules b{color:var(--txt)}
+  .empty{text-align:center;color:var(--muted);padding:30px 10px;font-weight:600}
+  .hidden{display:none!important}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);background:var(--green);color:#05210f;
+    font-weight:800;padding:12px 22px;border-radius:99px;font-size:14px;opacity:0;transition:.35s;z-index:50}
+  .toast.show{transform:translateX(-50%);opacity:1}
+</style>
+
+<div class="wrap">
+  <div class="hero">
+    <span class="badge">디지털편집부 · 브런치 월드컵</span>
+    <h1>스코어 <span class="accent">챌린지</span></h1>
+    <p class="sub">한국 조별리그 3경기 스코어를 맞혀라 · 11인의 자존심 대결</p>
+  </div>
+
+  <div class="namebar" id="namebar"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="predict">예측하기</div>
+    <div class="tab" data-tab="board">순위표</div>
+    <div class="tab" data-tab="admin">운영자</div>
+  </div>
+
+  <div id="view-predict"></div>
+  <div id="view-board" class="hidden"></div>
+  <div id="view-admin" class="hidden"></div>
+
+  <div class="rules">
+    <b>채점 규칙</b><br>
+    · 스코어 정확히 적중 = <b style="color:var(--gold)">3점</b><br>
+    · 승·무·패(결과)만 적중 = <b style="color:var(--blue)">1점</b><br>
+    · 둘 다 틀림 = 0점<br>
+    · <b style="color:var(--red-soft)">멕시코전</b>은 난이도가 높아 정확 적중 시 <b>보너스 +2점</b><br>
+    · 예측은 각 경기 킥오프 시각에 자동 마감되고, 마감 후 모두의 예측이 공개됩니다.
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== 설정 ===================== */
+
+/* ★★★ 1단계: 아래에 본인 Firebase 프로젝트 설정을 붙여넣으세요 ★★★
+   Firebase 콘솔 → 프로젝트 설정 → '내 앱'에서 복사한 값입니다.
+   databaseURL 줄이 반드시 포함돼야 합니다(Realtime Database 사용). */
+const firebaseConfig = {
+  apiKey: "AIzaSyDDDXbjhqy_kRvXzLt5BJLTZLqV36XyU60",
+  authDomain: "worldcup-score-d1ea0.firebaseapp.com",
+  databaseURL: "https://worldcup-score-d1ea0-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "worldcup-score-d1ea0",
+  storageBucket: "worldcup-score-d1ea0.firebasestorage.app",
+  messagingSenderId: "52668757541",
+  appId: "1:52668757541:web:c045c0e763573fa12cf1cc",
+  measurementId: "G-H8ZBR5ZSXE"
+};
+let db = null;
+try{ firebase.initializeApp(firebaseConfig); db = firebase.database(); }
+catch(e){ console.error('Firebase 초기화 실패 — firebaseConfig를 확인하세요:', e); }
+
+// 운영자 비밀번호 — 바꾸려면 아래 값만 수정하세요.
+const ADMIN_PASS = "goal2026";
+const ROSTER = ["이상훈","김경훈","박동휘","현수아","남윤정","김여진","김도연","김수호","강지원","임혜린","조수연"];
+const ROSTER_SIZE = ROSTER.length;
+
+const MATCHES = [
+  { id:'czech',  no:1, opp:'체코',   flag:'🇨🇿', when:'6/12 (금) 11:00', venue:'과달라하라', open:0,                          ko: Date.UTC(2026,5,12,2,0,0), bonus:false, openNote:'' },
+  { id:'mexico', no:2, opp:'멕시코', flag:'🇲🇽', when:'6/19 (금) 10:00', venue:'과달라하라', open:Date.UTC(2026,5,12,4,0,0), ko: Date.UTC(2026,5,19,1,0,0), bonus:true,  openNote:'1경기 종료 후 자동 오픈' },
+  { id:'sa',     no:3, opp:'남아공', flag:'🇿🇦', when:'6/25 (목) 10:00', venue:'몬테레이',   open:Date.UTC(2026,5,19,3,0,0), ko: Date.UTC(2026,5,25,1,0,0), bonus:false, openNote:'2경기 종료 후 자동 오픈' },
+];
+
+/* ===================== 상태 ===================== */
+let myName = "";
+let myPreds = {};                 // {czech:{k,o}, ...} (편집중 로컬값)
+let entries = [];                 // [{name, preds}]
+let results = {};                 // {czech:{k,o}, ...}
+let adminUnlocked = false;
+let curTab = 'predict';
+
+const $ = s => document.querySelector(s);
+const keyFor = n => 'p_' + encodeURIComponent(n.trim());   // Realtime DB 안전 키
+const clone = x => JSON.parse(JSON.stringify(x));
+const isLocked = m => Date.now() >= m.ko;
+const isOpen = m => Date.now() >= (m.open||0);
+
+/* ===================== Firebase 데이터 ===================== */
+let _seeded = false;
+function loadMyName(){ try{ myName = localStorage.getItem('wc-myname') || ''; }catch(e){} }
+function saveMyName(n){ myName = n.trim(); try{ localStorage.setItem('wc-myname', myName); }catch(e){} }
+
+async function saveMyPreds(){
+  if(!myName){ toast('이름을 먼저 선택하세요'); return; }
+  if(!db){ toast('Firebase 설정이 필요합니다'); return; }
+  try{
+    await db.ref('predictions/'+keyFor(myName)).set({ name: myName, preds: myPreds });
+    toast('예측 저장 완료! ⚽');
+  }catch(e){ console.error('save pred error:',e); toast('저장 실패: '+(e&&e.message?e.message:e)); }
+}
+async function saveResults(){
+  if(!db){ toast('Firebase 설정이 필요합니다'); return; }
+  try{ await db.ref('results').set(results); }
+  catch(e){ console.error('save result error:',e); alert('저장 실패: '+(e&&e.message?e.message:e)); }
+}
+async function resetAll(){
+  if(!db){ toast('Firebase 설정이 필요합니다'); return; }
+  if(!confirm('모든 예측과 경기 결과를 삭제합니다.\n(참가자가 처음부터 다시 입력해야 합니다.) 계속할까요?')) return;
+  try{
+    await db.ref('predictions').remove();
+    await db.ref('results').remove();
+    results = {}; window._admTmp = {};
+    toast('전체 초기화 완료 ✓');
+  }catch(e){ console.error(e); toast('초기화 실패, 다시 시도'); }
+}
+
+/* ===================== 채점 ===================== */
+function scoreOne(pred, res, bonus){
+  if(!res || !pred) return null;
+  if(pred.k===res.k && pred.o===res.o) return bonus ? 5 : 3;     // 정확
+  const sp = Math.sign(pred.k-pred.o), sr = Math.sign(res.k-res.o);
+  if(sp===sr) return 1;                                          // 결과만
+  return 0;
+}
+function totalFor(preds){
+  let t=0; for(const m of MATCHES){ const s=scoreOne(preds&&preds[m.id], results[m.id], m.bonus); if(s!=null) t+=s; } return t;
+}
+
+/* ===================== 렌더 ===================== */
+function renderNameBar(){
+  const el = $('#namebar');
+  if(myName){
+    el.innerHTML = `<div class="who">⚽ ${esc(myName)} 님<small>예측을 입력하고 순위표에서 경쟁하세요</small></div>
+      <button class="btn btn-ghost" id="rename">이름변경</button>`;
+    $('#rename').onclick = ()=>{ myName=""; myPreds={}; _seeded=true; saveMyName(""); renderNameBar(); renderAll(); };
+  }else{
+    const opts = ROSTER.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    el.innerHTML = `<select class="name-input" id="nm"><option value="">▼ 본인 이름을 선택하세요</option>${opts}</select>
+      <button class="btn btn-red" id="setnm">시작</button>`;
+    $('#setnm').onclick = ()=>{
+      const v = $('#nm').value; if(!v){ toast('이름을 선택하세요'); return; }
+      saveMyName(v);
+      const mine = entries.find(e=>e.name===myName);
+      myPreds = mine ? clone(mine.preds||{}) : {};
+      _seeded = true;
+      renderNameBar(); renderAll();
+    };
+  }
+}
+
+function renderPredict(){
+  const v = $('#view-predict');
+  if(!myName){ v.innerHTML = `<div class="empty">먼저 위에서 이름을 입력해 주세요 👆</div>`; return; }
+  v.innerHTML = MATCHES.map((m,i)=>{
+    const locked = isLocked(m);
+    const open = isOpen(m);
+    const res = results[m.id];
+    const p = myPreds[m.id] || {k:0,o:0};
+    let statusPill;
+    if(locked) statusPill = res?`<span class="pill pill-done">결과 완료</span>`:`<span class="pill pill-lock">마감</span>`;
+    else if(!open) statusPill = `<span class="pill pill-soon">예정</span>`;
+    else statusPill = `<span class="pill pill-open">응모중</span>`;
+    const bonusPill = m.bonus ? `<span class="pill pill-bonus">보너스 +2</span>` : '';
+
+    let body;
+    if(!locked && open){
+      body = `<div class="score-row">
+        <div class="team-box"><div class="lbl">🇰🇷 한국</div>${stepper(m.id,'k',p.k)}</div>
+        <div class="colon">:</div>
+        <div class="team-box"><div class="lbl">${m.flag} ${m.opp}</div>${stepper(m.id,'o',p.o)}</div>
+      </div>
+      <div class="save-line"><button class="btn btn-red" data-save="${m.id}">이 경기 예측 저장</button>
+        ${entries.find(e=>e.name===myName&&e.preds&&e.preds[m.id])?'<span class="saved-note">저장됨 ✓</span>':''}</div>`;
+    }else if(!locked && !open){
+      body = `<div class="result-strip">
+        <div class="r-lbl">🔒 ${m.openNote}</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:7px;font-weight:600">이전 경기가 끝나면 예측이 열립니다</div>
+      </div>`;
+    }else{
+      const resStrip = res
+        ? `<div class="result-strip"><div class="r-lbl">최종 결과</div><div class="r-score">🇰🇷 ${res.k} : ${res.o} ${m.flag}</div></div>`
+        : `<div class="result-strip"><div class="r-lbl">결과 입력 대기중</div></div>`;
+      body = resStrip + renderReveal(m, res);
+    }
+    return `<div class="card" style="animation-delay:${i*.06}s">
+      <div class="m-top">
+        <div class="m-no">MATCH ${m.no} ${statusPill}${bonusPill}</div>
+        <div class="m-meta">${m.when}<br>${m.venue}</div>
+      </div>
+      <div class="m-teams">🇰🇷 한국 <span class="vs">vs</span> ${m.flag} ${m.opp}</div>
+      ${body}
+    </div>`;
+  }).join('');
+
+  v.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{
+    const [mid,side,dir]=b.dataset.step.split('|');
+    myPreds[mid]=myPreds[mid]||{k:0,o:0};
+    let val=myPreds[mid][side]+(dir==='up'?1:-1);
+    val=Math.max(0,Math.min(9,val)); myPreds[mid][side]=val;
+    b.closest('.stepper').querySelector('.step-val').textContent=val;
+  });
+  v.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>saveMyPreds());
+}
+function stepper(mid,side,val){
+  return `<div class="stepper">
+    <button class="step-btn" data-step="${mid}|${side}|down">−</button>
+    <div class="step-val">${val}</div>
+    <button class="step-btn" data-step="${mid}|${side}|up">+</button>
+  </div>`;
+}
+function renderReveal(m,res){
+  const rows = entries.filter(e=>e.preds&&e.preds[m.id]).map(e=>{
+    const p=e.preds[m.id]; const s=scoreOne(p,res,m.bonus);
+    let tag='';
+    if(s!=null){ tag = s>=3?`<span class="tag tag-hit">+${s} 적중</span>` : s===1?`<span class="tag tag-out">+1</span>`:''; }
+    return `<div class="reveal-row"><span class="nm">${esc(e.name)}${e.name===myName?' (나)':''}</span>
+      <span class="sc">${p.k} : ${p.o}${tag}</span></div>`;
+  }).join('');
+  return `<div class="reveal"><h4>모두의 예측 (${entries.filter(e=>e.preds&&e.preds[m.id]).length}명)</h4>${rows||'<div class="empty">예측한 사람이 없습니다</div>'}</div>`;
+}
+
+function renderBoard(){
+  const v=$('#view-board');
+  const scored = MATCHES.some(m=>results[m.id]);
+  const submittedCount = entries.filter(e=>ROSTER.includes(e.name)).length;
+  const ranked = ROSTER.map(name=>{
+    const e=entries.find(x=>x.name===name);
+    return {name, submitted:!!e, pts:e?totalFor(e.preds):0, preds:e?e.preds:{}};
+  }).sort((a,b)=> (b.submitted-a.submitted) || (b.pts-a.pts) || a.name.localeCompare(b.name,'ko'));
+  v.innerHTML = `<div class="lb-head"><h2>🏆 순위표</h2><div class="cnt">제출 ${submittedCount} / ${ROSTER_SIZE}명</div></div>`
+    + (!scored ? `<div class="empty">아직 입력된 경기 결과가 없어요.<br>경기가 끝나면 운영자가 결과를 입력하면 순위가 자동 계산됩니다.</div>` : '')
+    + ranked.map((r,i)=>{
+        const rankLabel = (scored && r.submitted) ? (['🥇','🥈','🥉'][i]||(i+1)) : (i+1);
+        const dots=MATCHES.map(m=>{const s=scoreOne(r.preds&&r.preds[m.id],results[m.id],m.bonus);
+          const cls=s==null?'':s>=3?'p3':s===1?'p1':'p0'; return `<span class="dot ${cls}"></span>`;}).join('');
+        const right = r.submitted
+          ? `<div class="lb-pts">${r.pts}<small>점</small></div>`
+          : `<div style="color:var(--muted);font-size:12px;font-weight:800">미제출</div>`;
+        return `<div class="lb-row ${scored&&r.submitted&&i<3?'r'+(i+1):''}" style="animation-delay:${i*.035}s;${r.submitted?'':'opacity:.45'}">
+          <div class="lb-rank">${rankLabel}</div>
+          <div style="flex:1"><div class="lb-name">${esc(r.name)}${r.name===myName?'<span class="you">나</span>':''}</div>
+            <div class="lb-break">${dots}</div></div>
+          ${right}
+        </div>`;
+      }).join('');
+}
+
+function renderAdmin(){
+  const v=$('#view-admin');
+  if(!adminUnlocked){
+    v.innerHTML = `<div class="card admin-lock">
+      <div style="font-weight:800;margin-bottom:4px">🔒 운영자 전용</div>
+      <div style="color:var(--muted);font-size:13px">경기 종료 후 실제 스코어를 입력하면 순위가 자동 갱신됩니다.</div>
+      <input class="name-input" id="pw" type="password" placeholder="비밀번호" style="text-align:center">
+      <button class="btn btn-red" id="unlock" style="width:160px;margin:0 auto;display:block;padding:12px">확인</button>
+    </div>`;
+    $('#unlock').onclick=()=>{ if($('#pw').value===ADMIN_PASS){adminUnlocked=true;renderAdmin();}else toast('비밀번호가 틀렸어요'); };
+    $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')$('#unlock').click();});
+    return;
+  }
+  v.innerHTML = MATCHES.map(m=>{
+    const r=results[m.id]||{k:0,o:0};
+    return `<div class="adm-match">
+      <div class="t">MATCH ${m.no} · 🇰🇷 한국 vs ${m.flag} ${m.opp}</div>
+      <div class="score-row">
+        <div class="team-box"><div class="lbl">한국</div>${stepperAdm(m.id,'k',r.k)}</div>
+        <div class="colon">:</div>
+        <div class="team-box"><div class="lbl">${m.opp}</div>${stepperAdm(m.id,'o',r.o)}</div>
+      </div>
+      <div class="save-line">
+        <button class="btn btn-red" data-rsave="${m.id}">결과 저장</button>
+        ${results[m.id]?`<button class="btn btn-ghost" data-rclear="${m.id}">취소</button>`:''}
+      </div>
+    </div>`;
+  }).join('')
+  + `<div class="adm-match" style="border-color:var(--red)">
+       <div class="t" style="color:var(--red-soft)">⚠ 데이터 관리</div>
+       <div style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:12px">
+         현재 저장된 예측 <b style="color:var(--txt)">${entries.length}건</b> · 입력된 결과 <b style="color:var(--txt)">${MATCHES.filter(m=>results[m.id]).length}경기</b><br>
+         테스트가 끝났다면 본 이벤트 시작 전에 아래 버튼으로 모두 비우세요.
+       </div>
+       <button class="btn btn-ghost" id="resetAll" style="color:var(--red-soft);border-color:var(--red)">테스트 데이터 전체 삭제</button>
+     </div>`;
+  const rb=$('#resetAll'); if(rb) rb.onclick=resetAll;
+  v.querySelectorAll('[data-astep]').forEach(b=>b.onclick=()=>{
+    const [mid,side,dir]=b.dataset.astep.split('|');
+    const tmp=window._admTmp=window._admTmp||{};
+    tmp[mid]=tmp[mid]||Object.assign({k:0,o:0},results[mid]||{});
+    let val=tmp[mid][side]+(dir==='up'?1:-1); val=Math.max(0,Math.min(20,val)); tmp[mid][side]=val;
+    b.closest('.stepper').querySelector('.step-val').textContent=val;
+  });
+  v.querySelectorAll('[data-rsave]').forEach(b=>b.onclick=async()=>{
+    const mid=b.dataset.rsave; const tmp=(window._admTmp||{})[mid]||results[mid]||{k:0,o:0};
+    results[mid]={k:tmp.k,o:tmp.o}; await saveResults(); toast('결과 저장 ✓'); renderAll();
+  });
+  v.querySelectorAll('[data-rclear]').forEach(b=>b.onclick=async()=>{
+    const mid=b.dataset.rclear; delete results[mid]; if(window._admTmp)delete window._admTmp[mid];
+    await saveResults(); renderAll();
+  });
+}
+function stepperAdm(mid,side,val){
+  return `<div class="stepper">
+    <button class="step-btn" data-astep="${mid}|${side}|down">−</button>
+    <div class="step-val">${val}</div>
+    <button class="step-btn" data-astep="${mid}|${side}|up">+</button>
+  </div>`;
+}
+
+function renderAll(){ renderPredict(); renderBoard(); renderAdmin(); }
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* tabs */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); curTab=t.dataset.tab;
+  ['predict','board','admin'].forEach(id=>$('#view-'+id).classList.toggle('hidden', id!==curTab));
+  renderAll();
+});
+
+/* init — Firebase 실시간 동기화 */
+(function(){
+  loadMyName();
+  renderNameBar();
+  renderAll();
+
+  if(!db){ console.warn('Firebase 미설정: firebaseConfig를 채우면 데이터 공유가 활성화됩니다.'); return; }
+
+  db.ref('results').on('value', snap=>{ results = snap.val() || {}; renderAll(); },
+    err=>{ console.error('results read error:',err); });
+
+  db.ref('predictions').on('value', snap=>{
+    const val = snap.val() || {};
+    entries = Object.keys(val).map(k=>val[k]).filter(v=>v&&v.name);
+    if(!_seeded && myName){ const mine = entries.find(e=>e.name===myName); myPreds = mine?clone(mine.preds||{}):{}; _seeded = true; }
+    renderAll();
+  }, err=>{ console.error('predictions read error:',err); });
+
+  // 분 단위로 오픈/마감 상태 갱신 (시간 경과 반영)
+  setInterval(()=>{ if(curTab!=='admin') renderAll(); }, 60000);
+})();
+</script>
