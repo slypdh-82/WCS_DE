@@ -143,6 +143,15 @@
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);background:var(--green);color:#05210f;
     font-weight:800;padding:12px 22px;border-radius:99px;font-size:14px;opacity:0;transition:.35s;z-index:50}
   .toast.show{transform:translateX(-50%);opacity:1}
+  .modal-ov{position:fixed;inset:0;background:rgba(4,7,14,.72);display:flex;align-items:center;justify-content:center;z-index:90;padding:20px}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:330px;width:100%;text-align:center;animation:rise .3s both}
+  .modal-t{font-weight:800;font-size:18px}
+  .modal-s{color:var(--muted);font-size:13px;margin-top:8px;line-height:1.55}
+  .pin-in{width:100%;background:var(--bg-0);border:1px solid var(--line);border-radius:12px;color:var(--txt);
+    padding:14px;font-size:30px;text-align:center;letter-spacing:.45em;margin:16px 0 12px;font-family:'Black Han Sans',sans-serif}
+  .modal-btns{display:flex;gap:8px}
+  .modal-btns .btn{flex:1;padding:12px}
+  .modal-err{color:var(--red-soft);font-size:12px;font-weight:700;margin-top:10px;min-height:14px}
 </style>
 
 <div class="wrap">
@@ -209,8 +218,9 @@ const MATCHES = [
 
 /* ===================== 상태 ===================== */
 let myName = "";
+let myPin = null;                 // 본인 비밀번호 해시
 let myPreds = {};                 // {czech:{k,o}, ...} (편집중 로컬값)
-let entries = [];                 // [{name, preds}]
+let entries = [];                 // [{name, preds, pin}]
 let results = {};                 // {czech:{k,o}, ...}
 let adminUnlocked = false;
 let curTab = 'predict';
@@ -223,14 +233,22 @@ const isOpen = m => Date.now() >= (m.open||0);
 
 /* ===================== Firebase 데이터 ===================== */
 let _seeded = false;
-function loadMyName(){ try{ myName = localStorage.getItem('wc-myname') || ''; }catch(e){} }
-function saveMyName(n){ myName = n.trim(); try{ localStorage.setItem('wc-myname', myName); }catch(e){} }
+function loadMyName(){ try{ const a=JSON.parse(localStorage.getItem('wc-auth')||'null'); if(a&&a.name){ myName=a.name; myPin=a.pin||null; } }catch(e){} }
+function setAuth(name, pin){ try{ localStorage.setItem('wc-auth', JSON.stringify({name, pin})); }catch(e){} }
+function clearAuth(){ try{ localStorage.removeItem('wc-auth'); }catch(e){} }
+function hashPin(pin){ let h=5381; const s='wc:'+pin; for(let i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))>>>0; } return 'h'+h.toString(36); }
+function login(name, pinHash, existing){
+  myName=name; myPin=pinHash; setAuth(name, pinHash);
+  myPreds = existing ? clone(existing.preds||{}) : {};
+  _seeded = true;
+  renderNameBar(); renderAll();
+}
 
 async function saveMyPreds(){
   if(!myName){ toast('이름을 먼저 선택하세요'); return; }
   if(!db){ toast('Firebase 설정이 필요합니다'); return; }
   try{
-    await db.ref('predictions/'+keyFor(myName)).set({ name: myName, preds: myPreds });
+    await db.ref('predictions/'+keyFor(myName)).set({ name: myName, preds: myPreds, pin: myPin });
     toast('예측 저장 완료! ⚽');
   }catch(e){ console.error('save pred error:',e); toast('저장 실패: '+(e&&e.message?e.message:e)); }
 }
@@ -267,19 +285,29 @@ function renderNameBar(){
   const el = $('#namebar');
   if(myName){
     el.innerHTML = `<div class="who">⚽ ${esc(myName)} 님<small>예측을 입력하고 순위표에서 경쟁하세요</small></div>
-      <button class="btn btn-ghost" id="rename">이름변경</button>`;
-    $('#rename').onclick = ()=>{ myName=""; myPreds={}; _seeded=true; saveMyName(""); renderNameBar(); renderAll(); };
+      <button class="btn btn-ghost" id="rename">변경</button>`;
+    $('#rename').onclick = ()=>{ myName=""; myPin=null; myPreds={}; _seeded=true; clearAuth(); renderNameBar(); renderAll(); };
   }else{
     const opts = ROSTER.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
     el.innerHTML = `<select class="name-input" id="nm"><option value="">▼ 본인 이름을 선택하세요</option>${opts}</select>
       <button class="btn btn-red" id="setnm">시작</button>`;
-    $('#setnm').onclick = ()=>{
+    $('#setnm').onclick = async ()=>{
       const v = $('#nm').value; if(!v){ toast('이름을 선택하세요'); return; }
-      saveMyName(v);
-      const mine = entries.find(e=>e.name===myName);
-      myPreds = mine ? clone(mine.preds||{}) : {};
-      _seeded = true;
-      renderNameBar(); renderAll();
+      if(!db){ toast('Firebase 설정이 필요합니다'); return; }
+      const existing = entries.find(e=>e.name===v);
+      if(existing && existing.pin){
+        const pin = await askPin({title:`${v} 님, 비밀번호 입력`, sub:'본인이 설정한 숫자 4자리를 입력하세요'});
+        if(pin==null) return;
+        if(hashPin(pin)!==existing.pin){ toast('비밀번호가 틀렸어요'); return; }
+        login(v, existing.pin, existing);
+      }else{
+        const pin = await askPin({title:`${v} 님, 비밀번호 설정`, sub:'앞으로 내 예측을 수정할 때 쓸 숫자 4자리를 정하세요', confirmLabel:'설정'});
+        if(pin==null) return;
+        const hash = hashPin(pin);
+        try{ await db.ref('predictions/'+keyFor(v)).set({ name:v, preds: existing?clone(existing.preds||{}):{}, pin: hash }); }
+        catch(e){ console.error(e); toast('설정 실패: '+(e&&e.message?e.message:e)); return; }
+        login(v, hash, existing);
+      }
     };
   }
 }
@@ -358,11 +386,12 @@ function renderReveal(m,res){
 function renderBoard(){
   const v=$('#view-board');
   const scored = MATCHES.some(m=>results[m.id]);
-  const submittedCount = entries.filter(e=>ROSTER.includes(e.name)).length;
   const ranked = ROSTER.map(name=>{
     const e=entries.find(x=>x.name===name);
-    return {name, submitted:!!e, pts:e?totalFor(e.preds):0, preds:e?e.preds:{}};
+    const has = !!(e && e.preds && Object.keys(e.preds).length>0);
+    return {name, submitted:has, pts:e?totalFor(e.preds):0, preds:e?e.preds:{}};
   }).sort((a,b)=> (b.submitted-a.submitted) || (b.pts-a.pts) || a.name.localeCompare(b.name,'ko'));
+  const submittedCount = ranked.filter(r=>r.submitted).length;
   v.innerHTML = `<div class="lb-head"><h2>🏆 순위표</h2><div class="cnt">제출 ${submittedCount} / ${ROSTER_SIZE}명</div></div>`
     + (!scored ? `<div class="empty">아직 입력된 경기 결과가 없어요.<br>경기가 끝나면 운영자가 결과를 입력하면 순위가 자동 계산됩니다.</div>` : '')
     + ranked.map((r,i)=>{
@@ -445,6 +474,28 @@ function stepperAdm(mid,side,val){
 function renderAll(){ renderPredict(); renderBoard(); renderAdmin(); }
 
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function askPin({title, sub, confirmLabel='확인'}){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div'); ov.className='modal-ov';
+    ov.innerHTML=`<div class="modal">
+      <div class="modal-t">${title}</div>
+      ${sub?`<div class="modal-s">${sub}</div>`:''}
+      <input class="pin-in" id="pinIn" inputmode="numeric" maxlength="4" placeholder="꒰ ꒱" autocomplete="off">
+      <div class="modal-btns"><button class="btn btn-ghost" id="pinCancel">취소</button><button class="btn btn-red" id="pinOk">${confirmLabel}</button></div>
+      <div class="modal-err" id="pinErr"></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const inp=ov.querySelector('#pinIn'); setTimeout(()=>inp.focus(),50);
+    inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/\D/g,'').slice(0,4); });
+    const close=val=>{ if(ov.parentNode) document.body.removeChild(ov); resolve(val); };
+    ov.querySelector('#pinCancel').onclick=()=>close(null);
+    ov.querySelector('#pinOk').onclick=()=>{
+      if(!/^\d{4}$/.test(inp.value)){ ov.querySelector('#pinErr').textContent='숫자 4자리를 입력하세요'; return; }
+      close(inp.value);
+    };
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') ov.querySelector('#pinOk').click(); });
+  });
+}
 let toastT;
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
 
